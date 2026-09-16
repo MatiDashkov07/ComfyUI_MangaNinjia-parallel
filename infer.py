@@ -145,7 +145,7 @@ def nijia_loader(MangaNinjia_weigths_path,repo,controlnet_model_name_or_path,ima
     pipe.enable_xformers_memory_efficient_attention()
     return pipe,preprocessor,refnet_tokenizer,refnet_text_encoder,refnet_image_encoder,vae
 
-def infer_main (model,ref_image_list,lineart_image_list,ref_value,lineart_value,denoise_steps,seed,is_lineart,guidance_scale_ref,guidance_scale_point,device):
+def infer_main (model,ref_image_list,lineart_image_list,ref_value,lineart_value,denoise_steps,seed,is_lineart,guidance_scale_ref,guidance_scale_point,device,num_candidates=1):
      #pre data
     pipe=model.get("pipe")
     
@@ -235,20 +235,22 @@ def infer_main (model,ref_image_list,lineart_image_list,ref_value,lineart_value,
                 guidance_scale_point=guidance_scale_point,
                 preprocessor=preprocessor,
                 generator=generator,
-                point_ref=point_ref,  
-                point_main=point_main,  
+                point_ref=point_ref,
+                point_main=point_main,
                 controlnet_encoder_hidden_states=controlnet_encoder_hidden_states,
                 controlnet_uncond_encoder_hidden_states=controlnet_uncond_encoder_hidden_states,
                 refnet_encoder_hidden_states=refnet_encoder_hidden_states,
                 refnet_uncond_encoder_hidden_states=refnet_uncond_encoder_hidden_states,
-                ref1_latents=ref1_latents
+                ref1_latents=ref1_latents,
+                num_candidates=num_candidates,
+                seed=seed,
             )
 
             # if os.path.exists(colored_save_path):
             #     logging.warning(f"Existing file: '{colored_save_path}' will be overwritten")
-            image = pipe_out.latent
+            image = pipe_out.latent  # [num_candidates, 4, H/8, W/8]
             lineart = pipe_out.to_save_dict['edge2_black']
-            image_list.append(image)
+            image_list.extend(torch.chunk(image, num_candidates, dim=0))
             lineart_list.append(lineart)
             #image.save(colored_save_path)
             #lineart.save(lineart_save_path)

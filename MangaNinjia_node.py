@@ -127,6 +127,13 @@ class MangaNinjiaSampler:
                     "display": "number",  # Cosmetic only: display as "number" or "slider"
                 }),
                 "is_lineart": ("BOOLEAN", {"default": True},),
+                "num_candidates": ("INT", {
+                    "default": 1,
+                    "min": 1,
+                    "max": 20,
+                    "step": 1,
+                    "display": "number",
+                }),
                          },
             "optional": {
                 "xy_data_ref": ("MINJIA_DATA",),
@@ -140,7 +147,7 @@ class MangaNinjiaSampler:
     FUNCTION = "sampler_main"
     CATEGORY = "MangaNinjia"
     
-    def sampler_main(self, model,image,lineart_image,seed,width,height,guidance_scale_ref,guidance_scale_point,steps,is_lineart,**kwargs):
+    def sampler_main(self, model,image,lineart_image,seed,width,height,guidance_scale_ref,guidance_scale_point,steps,is_lineart,num_candidates=1,**kwargs):
         
         xy_data_ref=kwargs.get("xy_data_ref")
         xy_data_lineart=kwargs.get("xy_data_lineart")
@@ -160,7 +167,7 @@ class MangaNinjiaSampler:
  
 
         print("***********Start MangaNinjia Sampler**************")
-        iamge,lineart=infer_main(model,ref_image_list,lineart_image_list,ref_value,lineart_value,steps,seed,is_lineart,guidance_scale_ref,guidance_scale_point,device)
+        iamge,lineart=infer_main(model,ref_image_list,lineart_image_list,ref_value,lineart_value,steps,seed,is_lineart,guidance_scale_ref,guidance_scale_point,device,num_candidates=num_candidates)
         
         
         gc.collect()

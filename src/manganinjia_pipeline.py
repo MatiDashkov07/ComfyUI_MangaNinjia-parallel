@@ -88,6 +88,8 @@ class MangaNinjiaPipeline(DiffusionPipeline):
         refnet_encoder_hidden_states=None,
         refnet_uncond_encoder_hidden_states=None,
         ref1_latents=None,
+        num_candidates: int = 1,
+        seed: int = 0,
     ) -> MangaNinjiaPipelineOutput:
         controlnet_encoder_hidden_states=controlnet_encoder_hidden_states
         controlnet_uncond_encoder_hidden_states=controlnet_uncond_encoder_hidden_states
@@ -202,14 +204,14 @@ class MangaNinjiaPipeline(DiffusionPipeline):
             if self.reference_unet:
                 refnet_encoder_hidden_states = torch.cat(
                     [refnet_uncond_encoder_hidden_states, refnet_encoder_hidden_states,refnet_encoder_hidden_states], dim=0
-                )
+                ).repeat_interleave(num_candidates, dim=0)
             else:
                 refnet_encoder_hidden_states = None
 
             if self.controlnet:
                 controlnet_encoder_hidden_states = torch.cat(
                     [controlnet_uncond_encoder_hidden_states, controlnet_encoder_hidden_states,controlnet_encoder_hidden_states], dim=0
-                )
+                ).repeat_interleave(num_candidates, dim=0)
             else:
                 controlnet_encoder_hidden_states = None
 
@@ -262,6 +264,8 @@ class MangaNinjiaPipeline(DiffusionPipeline):
                 point_ref=point_ref,
                 point_main=point_main,
                 ref1_latents=self.ref1_latents,
+                num_candidates=num_candidates,
+                seed=seed,
             )
             for k, v in to_save_dict.items():
                 if k =='edge2_black':
@@ -355,7 +359,9 @@ class MangaNinjiaPipeline(DiffusionPipeline):
         generator,
         point_ref,
         point_main,
-        ref1_latents
+        ref1_latents,
+        num_candidates: int = 1,
+        seed: int = 0,
     ):
         do_classifier_free_guidance = guidance_scale_ref > 1.0
         device = ref1.device
@@ -384,11 +390,27 @@ class MangaNinjiaPipeline(DiffusionPipeline):
 
         edge2 = edge2.repeat(1, 3, 1, 1) * 2 - 1.
         to_save_dict['edge2'] = (1-((edge2+1.)/2))*2-1
-        
-        noisy_edit2_latents = torch.randn(
-            ref1_latents.shape, device=device, dtype=self.dtype
-        )  # [B, 4, H/8, W/8]
-            
+
+        # Expand the candidate axis: ref latents and the sketch/ControlNet
+        # condition are identical across candidates, only the starting
+        # noise differs (see noisy_edit2_latents below).
+        ref1_latents = ref1_latents.repeat(num_candidates, 1, 1, 1)
+        edge2 = edge2.repeat(num_candidates, 1, 1, 1)
+
+        # Each candidate gets its own explicit generator seeded from
+        # `seed + i`, so any single candidate can be reproduced later by
+        # rerunning it alone with num_candidates=1 and the same seed.
+        noisy_edit2_latents = torch.cat(
+            [
+                torch.randn(
+                    ref1_latents.shape[1:], device=device, dtype=self.dtype,
+                    generator=torch.Generator(device=device).manual_seed(seed + i),
+                ).unsqueeze(0)
+                for i in range(num_candidates)
+            ],
+            dim=0,
+        )  # [N, 4, H/8, W/8]
+
 
         # Denoising loop
         if show_pbar:
@@ -419,6 +441,14 @@ class MangaNinjiaPipeline(DiffusionPipeline):
                         encoder_hidden_states=refnet_encoder_hidden_states,
                         return_dict=False,
                     )
+                    # point_ref/point_main are never candidate-expanded (they stay
+                    # batch 1 regardless of num_candidates): PointNet preserves
+                    # whatever batch it's given, and the read-mode consumer in
+                    # mutual_self_attention_multi_scale.py does
+                    # `self.point_bank_main[0].repeat(norm_hidden_states.shape[0], 1, 1)`,
+                    # which dynamically repeats the batch-1 point embedding up to
+                    # whatever the current hidden_states batch is (3*num_candidates
+                    # under CFG) at forward time. No repeat needed here.
                     reference_control_reader.update(reference_control_writer,point_embedding_ref=point_ref,point_embedding_main=point_main)#size不对
                     # self.reference_unet.to("cpu") #只计算第一步
                     # torch.cuda.empty_cache()
