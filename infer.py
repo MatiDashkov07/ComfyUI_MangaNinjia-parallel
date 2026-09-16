@@ -37,10 +37,12 @@ def nijia_loader(MangaNinjia_weigths_path,repo,controlnet_model_name_or_path,ima
 
     try:
         pipe = StableDiffusionPipeline.from_single_file(
-            ckpt_path,config=sd_config, original_config=original_config_file)
+            ckpt_path,config=sd_config, original_config=original_config_file,
+            feature_extractor=None, safety_checker=None, requires_safety_checker=False)
     except:
         pipe = StableDiffusionPipeline.from_single_file(
-            ckpt_path, config=sd_config,original_config_file=original_config_file)
+            ckpt_path, config=sd_config,original_config_file=original_config_file,
+            feature_extractor=None, safety_checker=None, requires_safety_checker=False)
 
 
     noise_scheduler = DDIMScheduler.from_pretrained(repo,subfolder='scheduler')
