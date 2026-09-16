@@ -156,8 +156,12 @@ class ReferenceAttentionControl:
                         for d in self.bank
                     ]
                     try:
+                        point_bank_main_rep = self.point_bank_main[0].repeat(norm_hidden_states.shape[0], 1, 1)
+                        point_bank_ref_rep = self.point_bank_ref[0].repeat(norm_hidden_states.shape[0], 1, 1)
+                        print(f"[shape-dryrun] point_bank_main_rep.shape={tuple(point_bank_main_rep.shape)} point_bank_ref_rep.shape={tuple(point_bank_ref_rep.shape)} norm_hidden_states.shape[0]={norm_hidden_states.shape[0]}")
+                        assert point_bank_main_rep.shape[0] == norm_hidden_states.shape[0]
                         modify_norm_hidden_states = torch.cat(
-                            [norm_hidden_states+self.point_bank_main[0].repeat(norm_hidden_states.shape[0],1,1)] + [bank_fea[0]+self.point_bank_ref[0].repeat(norm_hidden_states.shape[0],1,1)], dim=1
+                            [norm_hidden_states+point_bank_main_rep] + [bank_fea[0]+point_bank_ref_rep], dim=1
                         )
                         modify_norm_hidden_states_v = torch.cat(
                             [norm_hidden_states] + bank_fea, dim=1
@@ -165,7 +169,7 @@ class ReferenceAttentionControl:
                         # import ipdb;ipdb.set_trace()
                         hidden_states_uc = (
                         self.attn1(
-                            norm_hidden_states+self.point_bank_main[0].repeat(norm_hidden_states.shape[0],1,1),
+                            norm_hidden_states+point_bank_main_rep,
                             encoder_hidden_states=modify_norm_hidden_states,
                             encoder_hidden_states_v=modify_norm_hidden_states_v,
                             attention_mask=attention_mask,
